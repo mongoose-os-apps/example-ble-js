@@ -1,0 +1,22 @@
+author: mongoose-os
+description: Example of BT GATT API usage
+version: 1.0
+
+libs_version: ${mos.version}
+modules_version: ${mos.version}
+mongoose_os_version: ${mos.version}
+
+tags:
+  - js
+  - ble
+  - bt
+
+filesystem:
+  - fs
+
+libs:
+  - origin: https://github.com/mongoose-os-libs/boards
+  - origin: https://github.com/mongoose-os-libs/bt-common
+  - origin: https://github.com/mongoose-os-libs/mjs
+
+manifest_version: 2017-05-18
