@@ -96,9 +96,9 @@ GATTS.registerService(
        print(c.addr, "connected");
        return GATT.STATUS_OK;
      } else if (ev === GATTS.EV_READ) {
-       if (arg.uuid === "11111111-90ab-cdef-0123-456789abcdef") {
+       if (arg.char_uuid === "11111111-90ab-cdef-0123-456789abcdef") {
          GATTS.sendRespData(c, arg, "Hello");
-       } else if (arg.uuid === "22222222-90ab-cdef-0123-456789abcdef") {
+       } else if (arg.char_uuid === "22222222-90ab-cdef-0123-456789abcdef") {
          GATTS.sendRespData(c, arg, "world");
        }
        return GATT.STATUS_OK;
