@@ -17,6 +17,12 @@ filesystem:
 libs:
   - origin: https://github.com/mongoose-os-libs/boards
   - origin: https://github.com/mongoose-os-libs/bt-common
+  - origin: https://github.com/mongoose-os-libs/bt-service-config
+  - origin: https://github.com/mongoose-os-libs/bt-service-debug
+  - origin: https://github.com/mongoose-os-libs/rpc-gatts
   - origin: https://github.com/mongoose-os-libs/mjs
+
+config_schema:
+  - ["bt.gatt_mtu", 30]  # To test long reads/writes.
 
 manifest_version: 2017-05-18

@@ -8,6 +8,18 @@ load('api_bt_gap.js');
 load('api_bt_gattc.js');
 load('api_bt_gatts.js');
 
+// Will connect to this device if found.
+let PERIPH_NAME = 'esp32_001580';
+let THINGS_TO_WRITE = [
+  {data: "nothing"},  // Default: no response.
+  {data: "a tiny bit", rr: true},
+  {data: "a little something", rr: false},
+  {data: "a giant, absolutely enormous, mountain of a thing, absolutely ginormous", rr: false},
+];
+
+let addr = null, conn = null;
+let wi = 0, wh = 0;
+
 let btn = Cfg.get('board.btn1.pin');              // Built-in button GPIO
 
 if (btn >= 0) {
@@ -21,17 +33,16 @@ if (btn >= 0) {
     btnEdge = GPIO.INT_EDGE_POS;
   }
   GPIO.set_button_handler(btn, btnPull, btnEdge, 20, function() {
-    GAP.scan(1000, false);
+    addr = null;
+    GAP.scan(2000, false);
   }, null);
 }
-
-let addr = null;
 
 Event.on(GAP.EV_SCAN_RESULT, function(ev, evdata) {
   let sr = GAP.getScanResultArg(evdata);
   let name = GAP.parseName(sr.advData);
   print(JSON.stringify(sr), name);
-  if (name === 'esp32_056B8C') addr = sr.addr;
+  if (name === PERIPH_NAME) addr = sr.addr;
 }, null);
 
 Event.on(GAP.EV_SCAN_STOP, function(ev, evdata) {
@@ -40,16 +51,29 @@ Event.on(GAP.EV_SCAN_STOP, function(ev, evdata) {
   GATTC.connect(addr);
 }, null);
 
-function disconnect(conn) {
-  print('Disconnecting from', conn.addr)
+function disconnect() {
+  if (!conn) return;
+  print('Disconnecting from', JSON.stringify(conn));
   GATTC.disconnect(conn.connId);
 }
 
-Event.on(GATTC.EV_CONNECT, function(ev, evdata) {
-  let conn = GATTC.getConnectArg(evdata);
-  print('Enumerating services on', conn.addr, conn.connId);
+function discover() {
+  if (!conn) return;
+  print('Enumerating characteristics on', conn.addr, conn.connId);
   GATTC.discover(conn.connId);
-  Timer.set(5000, 0, disconnect, conn);
+}
+
+Event.on(GATTC.EV_CONNECT, function(ev, evdata) {
+  conn = GATTC.getConnectArg(evdata);
+  discover();
+  Timer.set(5000, 0, disconnect, null);
+}, null);
+
+Event.on(GATTC.EV_DISCONNECT, function(ev, evdata) {
+  let c = GATTC.getConnectArg(evdata);
+  print('Disconnected from', JSON.stringify(c));
+  wi = wh = 0;
+  conn = null;
 }, null);
 
 Event.on(GATTC.EV_DISCOVERY_RESULT, function(ev, evdata) {
@@ -59,12 +83,43 @@ Event.on(GATTC.EV_DISCOVERY_RESULT, function(ev, evdata) {
     GATTC.read(dr.conn.connId, dr.handle);
   } else if (dr.chr === '22222222-90ab-cdef-0123-456789abcdef') {
     GATTC.read(dr.conn.connId, dr.handle);
+    GATTC.setNotifyModeCCCD(conn.connId, dr.handle + 1, GATTC.NOTIFY_MODE_NOTIFY);
+    wh = dr.handle;
   }
+}, null);
+
+function writeSomething() {
+  if (!conn || !wh || wi >= THINGS_TO_WRITE.length) return;
+  let rr = THINGS_TO_WRITE[wi].rr;
+  GATTC.write(conn.connId, wh, THINGS_TO_WRITE[wi].data, rr);
+  if (!rr) Timer.set(200, 0, writeSomething, null);
+  wi++;
+}
+
+Event.on(GATTC.EV_DISCOVERY_DONE, function(ev, evdata) {
+  let dd = GATTC.getDiscoveryDoneArg(evdata);
+  print('Discovery done', JSON.stringify(dd));
+  writeSomething();
 }, null);
 
 Event.on(GATTC.EV_READ_RESULT, function(ev, evdata) {
   let rd = GATTC.getReadResult(evdata);
-  print('Read data:', rd.handle, rd.data);
+  print('Read data:', rd.handle, rd.ok, rd.data);
+}, null);
+
+Event.on(GATTC.EV_WRITE_RESULT, function(ev, evdata) {
+  let rd = GATTC.getWriteResult(evdata);
+  print('Write result:', rd.handle, rd.ok);
+  writeSomething();
+}, null);
+
+Event.on(GATTC.EV_NOTIFY, function(ev, evdata) {
+  let na = GATTC.getNotifyArg(evdata);
+  if (na.isIndication) {
+    print('Indication:', na.handle, na.data);
+  } else {
+    print('Notification:', na.handle, na.data);
+  }
 }, null);
 
 Event.on(GATTC.EV_NOTIFY, function(ev, evdata) {
@@ -93,13 +148,13 @@ GATTS.registerService(
    function svch(c, ev, arg) {
      print(JSON.stringify(c), ev, arg, JSON.stringify(arg));
      if (ev === GATTS.EV_CONNECT) {
-       print(c.addr, "connected");
+       print(c.addr, "connected, mtu", c.mtu);
        return GATT.STATUS_OK;
      } else if (ev === GATTS.EV_READ) {
        if (arg.char_uuid === "11111111-90ab-cdef-0123-456789abcdef") {
          GATTS.sendRespData(c, arg, "Hello");
        } else if (arg.char_uuid === "22222222-90ab-cdef-0123-456789abcdef") {
-         GATTS.sendRespData(c, arg, "world");
+         GATTS.sendRespData(c, arg, "0world1world2world3world4world5world6world7world8world9worldAworldBworldCworldDworldEworldF");
        }
        return GATT.STATUS_OK;
      } else if (ev === GATTS.EV_WRITE) {
@@ -122,6 +177,7 @@ GATTS.registerService(
    });
 
 Timer.set(1000, Timer.REPEAT, function() {
+  print("Uptime", Sys.uptime(), "free mem", Sys.free_ram());
   if (!subscriber) return;
   let se = subscriber;
   let data = JSON.stringify({up: Sys.uptime()});
