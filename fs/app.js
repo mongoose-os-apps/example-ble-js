@@ -127,15 +127,6 @@ Event.on(GATTC.EV_NOTIFY, function(ev, evdata) {
   print('Got notification:', na.data);
 }, null);
 
-Event.on(Event.CLOUD_CONNECTED, function() {
-  online = true;
-  Shadow.update(0, {ram_total: Sys.total_ram()});
-}, null);
-
-Event.on(Event.CLOUD_DISCONNECTED, function() {
-  online = false;
-}, null);
-
 let subscriber = undefined;
 
 GATTS.registerService(
